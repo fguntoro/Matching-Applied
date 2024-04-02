@@ -1,0 +1,158 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+```{r}
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(ggthemes)
+source("R:/home/Matching/Matching-Applied/Scripts/match_functions.R")
+
+```
+
+```{r}
+res <- read.csv("R:/home/Matching/Matching-Applied/Results/res_df_simul2.csv")
+res <- read.csv("R:/home/Matching/Matching-Applied/Results/res_final_mod1.csv")
+res <- read.csv("R:/home/Matching/Matching-Applied/Results/res_mod1_j69.csv")
+```
+
+```{r}
+p.dat <- res %>%
+  filter(stat.formula== stat.formula[1]) %>%
+  mutate(Total_n = All..ESS..Control + All..ESS..Treated,
+         Total_matched = Matched..ESS..Control + Matched..ESS..Treated,
+         ESS_control_remainder = All..ESS..Control - Matched..ESS..Control,
+         ESS_treated_remainder = All..ESS..Treated - Matched..ESS..Treated) %>%
+  select("method", "distance", Total_n, Total_matched, ESS_control_remainder, "Matched..ESS..Control", ESS_treated_remainder, "Matched..ESS..Treated") %>%
+  melt(measure.vars = c("ESS_control_remainder", "Matched..ESS..Control", "ESS_treated_remainder", "Matched..ESS..Treated")) %>%
+  mutate(value = value/Total_n)
+
+ggplot(p.dat, aes(x=value, y=distance, fill=variable)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~ method, nrow =1) +
+  scale_fill_tableau() +
+  theme_few() +
+  theme(legend.key.size = unit(1, 'mm'),
+        legend.key.height = unit(1, 'mm'),
+        legend.key.width = unit(1, 'mm'),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=8))
+
+```
+```{r}
+p.dat <- res %>%
+  filter(stat.formula== stat.formula[1]) %>%
+  select("method", "distance", time)
+
+ggplot(p.dat, aes(x=time, y=distance, group =1, colour =time)) +
+  geom_point(size = 1.5, shape=18) +
+  geom_line(orientation = "y") +
+  facet_wrap(~ method, nrow = 1) +
+  scale_colour_gradient_tableau() +
+  theme_few() +
+  theme(legend.key.size = unit(1, 'mm'),
+      legend.key.height = unit(10, 'mm'),
+      legend.key.width = unit(1, 'mm'),
+      legend.title = element_text(size=10),
+      legend.text = element_text(size=8))
+```
+```{r}
+p.dat <- res %>%
+  filter(stat.formula== stat.formula[1]) %>%
+  select(method, distance, ends_with("Mean.Diff.")) %>%
+  melt()
+
+ggplot(p.dat, aes(x=value, y=distance, group =variable, colour= variable)) +
+  geom_vline(xintercept = 0.1, linetype = "dotted", colour ="grey") +
+  geom_point(size = 1.5, shape=18) +
+  geom_line(orientation = "y") +
+  facet_wrap(~ method, nrow = 1) +
+  scale_colour_tableau() +
+  theme_few() +
+  theme(legend.key.size = unit(1, 'mm'),
+        legend.key.height = unit(1, 'mm'),
+        legend.key.width = unit(1, 'mm'),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=8))
+```
+```{r}
+p.dat <- data.frame()
+stat.ids = c("unadjusted", "adjusted", "mixed", "marginal")
+for (stat.id in stat.ids) {
+  p.dat.tmp <- res %>%
+  filter(stat.formula== unique(stat.formula)[1]) %>%
+  select(method, distance, stat.formula, starts_with(stat.id))
+colnames(p.dat.tmp) <- gsub(paste0(stat.id, "_"), "", colnames(p.dat.tmp))
+p.dat.tmp$variable <- stat.id
+p.dat <- rbind(p.dat, p.dat.tmp)
+}
+p.dat$pval <- -log10(p.dat$pval)
+
+ggplot(p.dat, aes(x=estimate, y=distance, group =variable, colour= variable)) +
+  geom_vline(xintercept = 1, linetype = "dotted", colour="grey") +
+  geom_point(size = 1.5, position = position_dodge(width=0.5), shape=18) +
+  geom_linerange(aes(xmin=confint.lower, xmax=confint.upper), position = position_dodge(width=0.5)) +
+  facet_wrap(~ method, nrow = 1)+
+  scale_colour_tableau() +
+  theme_few() +
+  theme(legend.key.size = unit(2, 'mm'),
+        legend.key.height = unit(2, 'mm'),
+        legend.key.width = unit(2, 'mm'),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=8))
+```
+```{r}
+ggplot(p.dat, aes(x=pval, y=distance, group =variable, colour= variable)) +
+  geom_point(size = 1.5, position = position_dodge(width=0.5), shape=18) +
+  facet_wrap(~ method, nrow = 1) +
+  scale_colour_tableau() +
+  theme_few() +
+  theme(legend.key.size = unit(2, 'mm'),
+        legend.key.height = unit(2, 'mm'),
+        legend.key.width = unit(2, 'mm'),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=8))
+```
+```{r}
+p.dat <- data.frame()
+stat.ids = c("unadjusted", "adjusted", "mixed", "marginal")
+for (stat.id in stat.ids) {
+  p.dat.tmp <- res %>%
+  filter(stat.formula== unique(stat.formula)[2]) %>%
+  select(method, distance, stat.formula, starts_with(stat.id))
+colnames(p.dat.tmp) <- gsub(paste0(stat.id, "_"), "", colnames(p.dat.tmp))
+p.dat.tmp$variable <- stat.id
+p.dat <- rbind(p.dat, p.dat.tmp)
+}
+p.dat$pval <- -log10(p.dat$pval)
+
+ggplot(p.dat, aes(x=estimate, y=distance, group =variable, colour= variable)) +
+  geom_vline(xintercept = 1, linetype = "dotted", colour="grey") +
+  geom_point(size = 1.5, position = position_dodge(width=0.5), shape=18) +
+  geom_linerange(aes(xmin=confint.lower, xmax=confint.upper), position = position_dodge(width=0.5)) +
+  facet_wrap(~ method, nrow = 1) +
+  scale_colour_tableau() +
+  theme_few() +
+  theme(legend.key.size = unit(2, 'mm'),
+        legend.key.height = unit(2, 'mm'),
+        legend.key.width = unit(2, 'mm'),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=8))
+```
+
+```{r}
+ggplot(p.dat, aes(x=pval, y=distance, group =variable, colour= variable)) +
+  geom_vline(xintercept = -log10(0.05), linetype = "dotted", colour="grey") +
+  geom_point(size = 1.5, position = position_dodge(width=0.5), shape=18) +
+  facet_wrap(~ method, nrow = 1)  +
+  scale_colour_tableau() +
+  theme_few() +
+  theme(legend.key.size = unit(2, 'mm'),
+        legend.key.height = unit(2, 'mm'),
+        legend.key.width = unit(2, 'mm'),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=8))
+```

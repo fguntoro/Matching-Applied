@@ -1,0 +1,73 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+df = simul1(1000)
+ggplot(df,
+       aes(x, y,
+           color = d_factor)) +
+  geom_point() + 
+  labs(color = "Treatment status")
+
+fit <- lm(y ~ d_factor + x, data=df)
+df$resid <- fit$residuals
+
+ggplot(df,
+       aes(resid, y,
+           color = d_factor)) +
+  geom_point() + 
+  labs(color = "Treatment status")
+```
+
+
+```{r}
+df = simul2(1000)
+ggplot(df,
+       aes(x, y,
+           color = d_factor)) +
+  geom_point() + 
+  labs(color = "Treatment status")
+
+fit <- lm(y ~ d_factor + x, data=df)
+df$resid <- fit$residuals
+
+ggplot(df,
+       aes(resid, y,
+           color = d_factor)) +
+  geom_point() + 
+  labs(color = "Treatment status")
+
+```
+
+```{r}
+#simul 1,2
+df <- simul3(1000)
+ggplot(df,
+       aes(x1, y,
+           color = d_factor)) +
+  geom_point() + 
+  labs(color = "Treatment status")
+
+ggplot(df,
+       aes(x2, y,
+           color = d_factor)) +
+  geom_point() + 
+  labs(color = "Treatment status")
+
+ggplot(df,
+       aes(x1, x2,
+           color = d_factor)) +
+  geom_point() + 
+  labs(color = "Treatment status")
+
+fit <- lm(y ~ x1 + x2, df)
+summary(fit)
+
+m.out <- matchit(d ~ x1 + x2, df, method = "quick", distance="glm")
+m.dat <- match.data(m.out)
+
+fit <- lm(y ~ x1 + x2, m.dat, weights = weights)
+summary(fit)
+```
