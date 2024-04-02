@@ -12,6 +12,7 @@ library(marginaleffects)
 library(lme4)
 library(lmtest) #coeftest
 library(sandwich) #vcovCL
+library(stringr)
 
 source("~/Matching/Matching-Applied/Scripts/match_functions.R")
 source("~/Matching/Matching-Applied/Scripts/simul.R")
@@ -27,7 +28,7 @@ map_idx = args[1]
 # SPECIFICATIONS #
 ############################
 # One variable - linear
-seeds = 1:100
+seeds = 1:5
 
 ### simulation specs
 mod=2
@@ -91,6 +92,16 @@ out <- mclapply(seeds, function(seed) {
 
 out <- do.call(rbind.data.frame, out)
 
+out.summary.mean <- out %>%
+  summarise(across(ESS.total.perc:marginal_pval, \(x) mean(x, na.rm=T))) %>%
+  rename_with(~str_c(., "_mean"), everything())
+
+out.summary.sd <- out %>%
+  summarise(across(ESS.total.perc:marginal_pval, \(x) sd(x, na.rm=T))) %>%
+  rename_with(~str_c(., "_sd"), everything())
+
+out.summary <- cbind(n_seeds=length(seeds), map, out.summary.mean, out.summary.sd)
+
 ############################
 # SAVE #
 ############################
@@ -101,12 +112,13 @@ if(!file.exists(map_savepath)) {
 }
 
 if (map$method == "null") {
-  write.csv(out, paste0("../Results/res_mod",mod,"_j", map_idx, "_null.csv"), row.names = F)
+  write.csv(out, paste0("~/../ephemeral/Matching/Results/unmatched/res_mod",mod,"_j", map_idx, "_null_iter.csv"), row.names = F)
+  write.csv(out.summary, paste0("../Results/unmatched/res_mod",mod,"_j", map_idx, "_null_summary.csv"), row.names = F)
 } else {
-  write.csv(out, paste0("../Results/res_mod",mod,"_j", map_idx, ".csv"), row.names = F)
+  write.csv(out, paste0("~/../ephemeral/Matching/Results/matched/res_mod",mod,"_j", map_idx, "_iter.csv"), row.names = F)
+  write.csv(out.summary, paste0("../Results/matched/res_mod",mod,"_j", map_idx, "_summary.csv"), row.names = F)
 }
 
 #################
 ###### END ######
 #################
-combinations <- do.call(expand.grid, mod_specs)

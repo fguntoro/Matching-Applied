@@ -62,8 +62,7 @@ MatchingFun <- function(formula.str, data, estimand, method, distance, ratio, co
   m.dat <- match.data(m.out)
   
   summ <- summary(m.out, addlvariables=covar.names, standardize=T, improvement=T, pair.dist=F)
-  head(summ$sum.matched)
-  
+
   # Get sample sizes including ESS, ESS/total%
   row.names(summ$nn)[c(1,3)] <- c("All.ESS", "Matched.ESS")
   ESS.total.perc <- round(sum(summ$nn[3,]) / sum(summ$nn[1,]) * 100, 2)
@@ -80,9 +79,9 @@ MatchingFun <- function(formula.str, data, estimand, method, distance, ratio, co
   # }
   
   # Get SMD, var ratio, and KS
-  summ.covars <- summ$sum.matched[covar.names,c(3,4,6)]
+  summ.covars <- cbind(summ$sum.matched[covar.names,c(3,4,6)], summ$reduction[covar.names, c(1,2,4)])
   summ.covars[,3] <- abs(summ.covars[,1])
-  colnames(summ.covars) <- c("SMD", "Var.ratio", "KS")
+  colnames(summ.covars) <- c("SMD", "Var.ratio", "KS", "SMD.PBR", "Var.ratio.log.PBR", "KS.PBR")
   
   if(length(covar.names) > 1) {
     summ.covars <- as.matrix(data.frame(mean = colMeans(summ.covars, na.rm = T),
@@ -129,13 +128,12 @@ StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "
   #names(res) <- c("total_n", do.call(paste0, expand.grid(outcome, c(0,1), "_", predictor, c(0,1))))
   res <- c()
   
-  if (family != "gaussian" & 0 %in% tab) {
-    stats_empty <- rep(NA, length(types)*4)
-    names(stats_empty) <- do.call(paste0, expand.grid(types,"_", c("estimate", "confint.lower", "confint.upper", "pval")) %>% arrange_all)
-    res <- c(res, stats_empty)
-    
-  } else {
-    
+  # if (family != "gaussian" & 0 %in% tab) {
+  #   stats_empty <- rep(NA, length(types)*4)
+  #   names(stats_empty) <- do.call(paste0, expand.grid(types,"_", c("estimate", "confint.lower", "confint.upper", "pval")) %>% arrange_all)
+  #   res <- c(res, stats_empty)
+  # 
+  # } else {
     t.test.res <- t.test(data$y[which(data$treat == 1)], data$y[which(data$treat == 0)])
     t.test.res <- c(t.test.res$estimate, t.test.res$p.value)
     names(t.test.res) <- c("treat1.mean", "treat2.mean", "t.test.pval")
@@ -177,7 +175,7 @@ StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "
       }
       res <- c(res, StatsGet(fit, type, family, treat_beta))
     }
-  }
+  # }
   
   res <- data.frame(as.list(t.test.res), as.list(res))
 }
