@@ -22,7 +22,7 @@ dir.create("../Results/", showWarnings = F)
 
 args = commandArgs(trailingOnly=TRUE)
 map_idx = args[1]
-#map_idx = 181
+#map_idx = 7814
 
 ############################
 # SPECIFICATIONS #
@@ -36,12 +36,15 @@ mod_specs <- get_mod_specs(mod)
 
 ### matching specs
 dat="data"
-predictor <- "treat"
+treat <- "treat"
 confounder <- "var1"
-f1 <- paste0(predictor, " ~ ", paste0(confounder, collapse = "+"))
+f1 <- paste0(treat, " ~ ", paste0(confounder, collapse = "+"))
 confounder <- paste0("var", 1:mod_specs$pk)
-f2 <- paste0(predictor, " ~ ", paste0(confounder, collapse = "+"))
-match.formulas <- c(f2)
+f2 <- paste0(treat, " ~ ", paste0(confounder, collapse = "+"))
+f3 <- "simul_selected"
+
+match.formulas <- c(f3)
+
 estimand = c("ATC", "ATT", "ATE")
 methods=c("null","nearest", "quick", "optimal", "genetic", "full")
 distances=c("glm", "gam", "randomforest", "cbps", "nnet", "bart", "robust_mahalanobis", "scaled_euclidean")
@@ -51,17 +54,17 @@ ratio=c(1)
 
 ### estimation specs
 outcome <- "y"
-f1 <- paste0(outcome, " ~ ", predictor)
-f2 <- paste0(outcome, " ~ ", predictor, "+", paste0(confounder, collapse = "+"))
+f1 <- paste0(outcome, " ~ ", treat, "+", paste0(confounder, collapse = "+"))
+f2 <- "simul_selected"
+
 stat.formulas <- c(f1, f2)
 family = "gaussian"
-covar.names <- paste0("c(", paste0("\"", confounder, "\"", collapse = ",") ,")")
 
 ### expand all and set seed
 dlist <- append(mod_specs,
                 list(
                   dat=dat, f=match.formulas, estimand=estimand, method=methods, distance=distances, ratio = ratio,
-                  stat.formula = stat.formulas, family=family, covar.names = covar.names, stringsAsFactors = F))
+                  stat.formula = stat.formulas, family=family, stringsAsFactors = F))
 map_full <- do.call(expand.grid, dlist)
 ### filters
 # non ATE methods: nearest, optimal, genetic
@@ -76,14 +79,13 @@ out <- mclapply(seeds, function(seed) {
   ### Generate simulation data
   ##########################################################
   
-  simul <- SimulateRegressionTreatment(n=map$n, pk = map$pk, treat_p = map$treat_p, treat_beta=map$treat_beta, nu_conf = map$nu_conf, nu_xy = map$nu_xy, complexity = map$complexity)
-  data <- data.frame(y=simul$ydata[,1], treat=simul$treat, simul$xdata)
+  simul <- SimulateRegressionTreatment(n=map$n, pk = map$pk, treat_p = map$treat_p, treat_beta=0.1, nu_conf = map$nu_conf, nu_xy = map$nu_xy, complexity = map$complexity, ev_xy=0.99)
   
   ############################
   # RUN #
   ############################
   
-  res <- main(data=data, map=map)
+  res <- main(data=simul, map=map)
   res <- with(map, data.frame(map_idx=map_idx, seed=seed,
                               res))
   return(res)

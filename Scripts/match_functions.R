@@ -1,16 +1,39 @@
 main <- function(data, map) {
-  formula.str <- map$f
   estimand <- map$estimand
   method <- map$method
   distance <- map$distance
   ratio <- map$ratio
-  stat.formula <- map$stat.formula
   family <- map$family
-  covar.names <- eval(parse(text = map$covar.names))
   treat_beta = map$treat_beta
   
-  match_out <- MatchingFun(formula.str=formula.str, data=data, estimand=estimand, method=method, distance=distance, ratio=ratio, covar.names=covar.names)
-  stats_out <- StatsFun(stat.formula=stat.formula, covar.names=covar.names, data=match_out$m.dat, family = family, weights = match_out$m.dat$weights, method = method, treat_beta=treat_beta)
+  if(class(data) == "simulation_regression") {
+    if(map$f == "simul_selected"){
+      true_conf <- data$theta_conf * data$theta
+      confounder <- paste0("var", which(true_conf==1))
+      formula.str <- paste0("treat", " ~ ", paste0(confounder, collapse = "+"))
+    } else {
+      formula.str <- map$f
+    }
+    
+    if(map$stat.formula == "simul_selected") {
+      confounder <- paste0("var", which(data$theta_conf==1))
+      stat.formula <- paste0("y", " ~ treat + ", paste0(confounder, collapse = "+"))
+    } else {
+      stat.formula <- map$stat.formula
+    }
+    
+    data <- with(data, data.frame(y=ydata[,1], treat=treat, xdata))
+    
+  } else {
+    data <- data
+    #TODO
+  }
+  
+  match.fm <- as.formula(formula.str)
+  stat.fm <- as.formula(stat.formula)
+  
+  match_out <- MatchingFun(formula=match.fm, data=data, estimand=estimand, method=method, distance=distance, ratio=ratio)
+  stats_out <- StatsFun(formula=stat.fm, data=match_out$m.dat, family = family, weights = match_out$m.dat$weights, method = method, treat_beta=treat_beta)
   
   res <- data.frame(as.list(c(map, match_out$res, stats_out)))
   
@@ -19,8 +42,10 @@ main <- function(data, map) {
 
 rescale <- function(x){(x-min(x))/(max(x)-min(x))}
 
-MatchingFun <- function(formula.str, data, estimand, method, distance, ratio, covar.names){
+MatchingFun <- function(formula, data, estimand, method, distance, ratio){
   print(paste0("Running ", method, " with distance ", distance, " and ratio ", ratio))
+  
+  covar.names <- labels(terms(formula))
   
   timeStart <- Sys.time()
   if (distance == "gbm") {
@@ -39,16 +64,16 @@ MatchingFun <- function(formula.str, data, estimand, method, distance, ratio, co
   
   suppressWarnings(
   if (method == "genetic") {
-    m.out <- matchit(as.formula(formula.str), data = data, estimand = estimand,
+    m.out <- matchit(formula, data = data, estimand = estimand,
                      method = method, distance = distance, distance.options = distance.options, pop.size = 100, ratio=ratio)
   } else if (method == "optimal") {
-    m.out <- matchit(as.formula(formula.str), data = data, estimand = estimand,
+    m.out <- matchit(formula, data = data, estimand = estimand,
                      method = method, distance = distance, distance.options = distance.options, tol = 1e-5, ratio=ratio)
   } else if (method == "null") {
-    m.out <- matchit(as.formula(formula.str), data = data, estimand = estimand,
+    m.out <- matchit(formula, data = data, estimand = estimand,
                      method = NULL)
   } else {
-    m.out <- matchit(as.formula(formula.str), data = data, estimand = estimand,
+    m.out <- matchit(formula, data = data, estimand = estimand,
                      method = method, distance = distance, distance.options = distance.options, ratio = ratio)
   }
   )
@@ -80,7 +105,7 @@ MatchingFun <- function(formula.str, data, estimand, method, distance, ratio, co
   
   # Get SMD, var ratio, and KS
   summ.covars <- cbind(summ$sum.matched[covar.names,c(3,4,6)], summ$reduction[covar.names, c(1,2,4)])
-  summ.covars[,3] <- abs(summ.covars[,1])
+  summ.covars[,1] <- abs(summ.covars[,1])
   colnames(summ.covars) <- c("SMD", "Var.ratio", "KS", "SMD.PBR", "Var.ratio.log.PBR", "KS.PBR")
   
   if(length(covar.names) > 1) {
@@ -100,7 +125,7 @@ MatchingFun <- function(formula.str, data, estimand, method, distance, ratio, co
 }
 
 
-StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "marginal"), stat.formula, covar.names, data, family="quasibinomial", weights, method, treat_beta) {
+StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "marginal"), formula, data, family="quasibinomial", weights, method, treat_beta) {
   
   if (family == "gaussian") {
     types=c("unadjusted", "adjusted", "mixed", "marginal")
@@ -113,19 +138,17 @@ StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "
     types=c("unadjusted", "adjusted")
   }
   
-  stat.formula.split <- strsplit(stat.formula, "~")[[1]]
-  outcome <- gsub(" ", "", stat.formula.split[1])
+  outcome <- as.character(formula[[2]])
+  covar.names <- labels(terms(formula))
+  treat <- covar.names[1]
+  covar.names <- covar.names[-1]
   
-  stat.formula.predictors <- strsplit(stat.formula.split[2], "\\+")[[1]]
-  predictor <- gsub(" ", "", stat.formula.predictors[1])
-  
-  dat_outcome <- data[,outcome]
-  dat_predictor <- factor(data[,predictor], levels = c(0,1))
-  
-  #tab <- table(dat_outcome, dat_predictor, dnn=c(outcome, predictor))
+  # dat_outcome <- data[,outcome]
+  # dat_treat <- factor(data[,treat], levels = c(0,1))
+  #tab <- table(dat_outcome, dat_treat, dnn=c(outcome, treat))
   #print(tab)
   #res <- c(sum(tab), tab[1,1],tab[2,1], tab[1,2], tab[2,2])
-  #names(res) <- c("total_n", do.call(paste0, expand.grid(outcome, c(0,1), "_", predictor, c(0,1))))
+  #names(res) <- c("total_n", do.call(paste0, expand.grid(outcome, c(0,1), "_", treat, c(0,1))))
   res <- c()
   
   # if (family != "gaussian" & 0 %in% tab) {
@@ -142,22 +165,22 @@ StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "
       
       if (type == "unadjusted") {
         # unadjusted
-        fm <- formula(paste0(outcome, "~", predictor))
+        fm <- formula(paste0(outcome, "~", treat))
         fit <- glm(fm, data = data, family=family, weights = weights)
         
       } else if (type == "adjusted") {
         # adjusted
-        fm <- formula(paste0(outcome, "~", predictor, "+", paste0(covar.names, collapse = "+")))
+        fm <- formula(paste0(outcome, "~", treat, "+", paste0(covar.names, collapse = "+")))
         fit <- glm(fm, data = data, family=family, weights = weights)
         
       } else if (type == "conditional") {
         # conditional logistic regression
-        fm <- formula(paste0(outcome, "~", predictor, "+", paste0(covar.names, collapse = "+"), " + strata(subclass)" ))
+        fm <- formula(paste0(outcome, "~", treat, "+", paste0(covar.names, collapse = "+"), " + strata(subclass)" ))
         fit <- clogit(fm, method="approximate", data = data, weights = weights)
         
       } else if (type == "mixed") {
         # conditional logistic regression
-        fm <- formula(paste0(outcome, "~", predictor, "+ (1 | subclass) +", paste0(covar.names, collapse = "+")))
+        fm <- formula(paste0(outcome, "~", treat, "+ (1 | subclass) +", paste0(covar.names, collapse = "+")))
         if (family == "gaussian") {
           fit <- suppressWarnings(lmer(fm, data = data, weights = weights))
         } else {
@@ -165,12 +188,12 @@ StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "
         }
         
       } else if (type == "marginal") {
-        fm <- formula(paste0(outcome, "~", predictor, "+", paste0(covar.names, collapse = "+")))
+        fm <- formula(paste0(outcome, "~", treat, "+", paste0(covar.names, collapse = "+")))
         fit <- glm(fm, data = data, family=family, weights = weights)
         # marginal effect
-        fit <- avg_comparisons(fit, variables = predictor,
+        fit <- avg_comparisons(fit, variables = treat,
                                vcov = ~subclass,
-                               newdata = subset(data, get(predictor) == 1), comparison = comparison,
+                               newdata = subset(data, treat == 1), comparison = comparison,
                                wts = "weights")
       }
       res <- c(res, StatsGet(fit, type, family, treat_beta))
