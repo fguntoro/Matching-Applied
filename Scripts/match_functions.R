@@ -5,6 +5,9 @@ main <- function(data, map) {
   ratio <- map$ratio
   family <- map$family
   treat_beta = map$treat_beta
+  caliper <- map$caliper
+  replace <- map$replace
+  discard <- map$discard
   
   if(class(data) == "simulation_regression") {
     if(map$f == "simul_selected"){
@@ -32,7 +35,7 @@ main <- function(data, map) {
   match.fm <- as.formula(formula.str)
   stat.fm <- as.formula(stat.formula)
   
-  match_out <- MatchingFun(formula=match.fm, data=data, estimand=estimand, method=method, distance=distance, ratio=ratio)
+  match_out <- MatchingFun(formula=match.fm, data=data, estimand=estimand, method=method, distance=distance, ratio=ratio, caliper, replace, discard)
   stats_out <- StatsFun(formula=stat.fm, data=match_out$m.dat, family = family, weights = match_out$m.dat$weights, method = method, treat_beta=treat_beta)
   
   res <- data.frame(as.list(c(map, match_out$res, stats_out)))
@@ -42,7 +45,7 @@ main <- function(data, map) {
 
 rescale <- function(x){(x-min(x))/(max(x)-min(x))}
 
-MatchingFun <- function(formula, data, estimand, method, distance, ratio){
+MatchingFun <- function(formula, data, estimand, method, distance, ratio, caliper, replace, discard){
   print(paste0("Running ", method, " with distance ", distance, " and ratio ", ratio))
   
   covar.names <- labels(terms(formula))
@@ -62,18 +65,30 @@ MatchingFun <- function(formula, data, estimand, method, distance, ratio){
     ratio = ratio
   }
   
+  if (caliper == "null") {
+    caliper = NULL
+  } else {
+    caliper = caliper
+  }
+  
+  if (replace == "F") {
+    replace=F
+  } else if (replace == "T") {
+    replace=T
+  }
+  
   suppressWarnings(
   if (method == "genetic") {
-    m.out <- matchit(formula, data = data, estimand = estimand,
+    m.out <- matchit(formula, data = data, estimand = estimand, caliper=caliper, replace=replace, discard=discard,
                      method = method, distance = distance, distance.options = distance.options, pop.size = 100, ratio=ratio)
   } else if (method == "optimal") {
-    m.out <- matchit(formula, data = data, estimand = estimand,
+    m.out <- matchit(formula, data = data, estimand = estimand, caliper=caliper, replace=replace, discard=discard,
                      method = method, distance = distance, distance.options = distance.options, tol = 1e-5, ratio=ratio)
   } else if (method == "null") {
-    m.out <- matchit(formula, data = data, estimand = estimand,
+    m.out <- matchit(formula, data = data, estimand = estimand, caliper=caliper, replace=replace, discard=discard,
                      method = NULL)
   } else {
-    m.out <- matchit(formula, data = data, estimand = estimand,
+    m.out <- matchit(formula, data = data, estimand = estimand, caliper=caliper, replace=replace, discard=discard,
                      method = method, distance = distance, distance.options = distance.options, ratio = ratio)
   }
   )
@@ -88,34 +103,30 @@ MatchingFun <- function(formula, data, estimand, method, distance, ratio){
   
   summ <- summary(m.out, addlvariables=covar.names, standardize=T, improvement=T, pair.dist=F)
 
-  # Get sample sizes including ESS, ESS/total%
-  row.names(summ$nn)[c(1,3)] <- c("All.ESS", "Matched.ESS")
-  ESS.total.perc <- round(sum(summ$nn[3,]) / sum(summ$nn[1,]) * 100, 2)
-  res <- c(unmatrix(summ$nn, byrow = T), ESS.total.perc = ESS.total.perc)
-           
-  # if(method == "null") {
-  #   res <- c(unmatrix(summ$nn, byrow = T),
-  #            rep(NA, 7*length(covar.names)),
-  #            time=time)
-  # } else {
-  #   res <- c(unmatrix(summ$nn, byrow = T),
-  #            unmatrix(summ$sum.matched, byrow = T),
-  #            time=time)
-  # }
-  
-  # Get SMD, var ratio, and KS
-  summ.covars <- cbind(summ$sum.matched[covar.names,c(3,4,6)], summ$reduction[covar.names, c(1,2,4)])
-  summ.covars[,1] <- abs(summ.covars[,1])
-  colnames(summ.covars) <- c("SMD", "Var.ratio", "KS", "SMD.PBR", "Var.ratio.log.PBR", "KS.PBR")
-  
-  if(length(covar.names) > 1) {
-    summ.covars <- as.matrix(data.frame(mean = colMeans(summ.covars, na.rm = T),
-                                        median = apply(summ.covars,2,median,na.rm = T),
-                                        max = apply(summ.covars,2,max)))
-    summ.covars <- unmatrix(summ.covars, byrow = T)
+  if(method == "null") {
+    res <- c(unmatrix(summ$nn, byrow = T),
+             time=time)
+  } else {
+    # Get sample sizes including ESS, ESS/total%
+    row.names(summ$nn)[c(1,3)] <- c("All.ESS", "Matched.ESS")
+    ESS.total.perc <- round(sum(summ$nn[3,]) / sum(summ$nn[1,]) * 100, 2)
+    res <- c(unmatrix(summ$nn, byrow = T), ESS.total.perc = ESS.total.perc)
+    
+    # Get SMD, var ratio, and KS
+    summ.covars <- cbind(summ$sum.matched[covar.names,c(3,4,6)], summ$reduction[covar.names, c(1,2,4)])
+    summ.covars[,1] <- abs(summ.covars[,1])
+    colnames(summ.covars) <- c("SMD", "Var.ratio", "KS", "SMD.PBR", "Var.ratio.log.PBR", "KS.PBR")
+    
+    if(length(covar.names) > 1) {
+      summ.covars <- as.matrix(data.frame(mean = colMeans(summ.covars, na.rm = T),
+                                          median = apply(summ.covars,2,median,na.rm = T),
+                                          max = apply(summ.covars,2,max)))
+      summ.covars <- unmatrix(summ.covars, byrow = T)
+    }
+    
+    res <- c(res, summ.covars, time.sec=time)
   }
   
-  res <- c(res, summ.covars, time.sec=time)
   res <- data.frame(as.list(res))
   res <- res %>% dplyr::select(-contains("distance.", ignore.case=F))
   

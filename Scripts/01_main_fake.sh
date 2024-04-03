@@ -1,6 +1,7 @@
+
 #PBS -l walltime=02:00:00
 #PBS -l select=1:ncpus=24:mem=100gb
-#PBS -J 1-1000
+#PBS -J 1-912
 
 module load anaconda3/personal
 source activate phd_r

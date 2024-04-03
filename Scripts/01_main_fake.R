@@ -19,57 +19,20 @@ source("~/Matching/Matching-Applied/Scripts/simul.R")
 source("~/Matching/Matching-Applied/Scripts/mod_definitions.R")
 
 dir.create("../Results/", showWarnings = F)
+dir.create("../Results/unmatched/", showWarnings = F)
+dir.create("../Results/matched/", showWarnings = F)
 
 args = commandArgs(trailingOnly=TRUE)
 map_idx = args[1]
-#map_idx = 7814
+#map_idx = 1
 
 ############################
 # SPECIFICATIONS #
 ############################
 # One variable - linear
-seeds = 1:5
+seeds = 1:2
 
-### simulation specs
-mod=2
-mod_specs <- get_mod_specs(mod)
-
-### matching specs
-dat="data"
-treat <- "treat"
-confounder <- "var1"
-f1 <- paste0(treat, " ~ ", paste0(confounder, collapse = "+"))
-confounder <- paste0("var", 1:mod_specs$pk)
-f2 <- paste0(treat, " ~ ", paste0(confounder, collapse = "+"))
-f3 <- "simul_selected"
-
-match.formulas <- c(f3)
-
-estimand = c("ATC", "ATT", "ATE")
-methods=c("null","nearest", "quick", "optimal", "genetic", "full")
-distances=c("glm", "gam", "randomforest", "cbps", "nnet", "bart", "robust_mahalanobis", "scaled_euclidean")
-ratio=c(1)
-#caliper
-#replace
-
-### estimation specs
-outcome <- "y"
-f1 <- paste0(outcome, " ~ ", treat, "+", paste0(confounder, collapse = "+"))
-f2 <- "simul_selected"
-
-stat.formulas <- c(f1, f2)
-family = "gaussian"
-
-### expand all and set seed
-dlist <- append(mod_specs,
-                list(
-                  dat=dat, f=match.formulas, estimand=estimand, method=methods, distance=distances, ratio = ratio,
-                  stat.formula = stat.formulas, family=family, stringsAsFactors = F))
-map_full <- do.call(expand.grid, dlist)
-### filters
-# non ATE methods: nearest, optimal, genetic
-map_full <- map_full %>% filter(!(estimand == "ATE" & method %in% c("nearest", "optimal", "genetic")))
-
+map_full <- get_exp_specs(1)
 map <- map_full[map_idx,]
 
 out <- mclapply(seeds, function(seed) {
@@ -90,7 +53,7 @@ out <- mclapply(seeds, function(seed) {
                               res))
   return(res)
 #})
-}, mc.cores = 4)
+}, mc.cores = 24)
 
 out <- do.call(rbind.data.frame, out)
 
