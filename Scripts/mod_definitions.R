@@ -4,16 +4,16 @@ get_exp_specs <- function(exp = 1) {
   ### get default
   dlist_default = get_default_spec()
   
-  sub_exps <- c("n", "pk", "nu_xy", "nu_conf", "treat_p", "treat_beta", "ev_xy", "complexity")
-  
   map_full <- data.frame()
   
   if (exp == 1) {
     ### Experiment 1: Simulation specs
+    sub_exps <- c("n", "pk", "nu_xy", "nu_conf", "treat_p", "treat_beta", "ev_xy", "complexity")
+    
     for(sub_exp in sub_exps) {
       dlist <- dlist_default
       if (sub_exp == "n") {
-        dlist$n = c(1000, 10000, 100000)
+        dlist$n = c(1000,2000,5000,10000,100000)
       }
       if (sub_exp == "pk") {
         dlist$pk = c(1, 10, 100)
@@ -40,19 +40,41 @@ get_exp_specs <- function(exp = 1) {
       }
       map_tmp <- do.call(expand.grid, dlist)
       map_full <- rbind(map_full, map_tmp)
-      
     }
+  } else if (exp == 2) {
+    ### Experiment 2: Matching specs
+    sub_exps <- c("ratio", "caliper", "replace", "discard")
     
-
+    for(sub_exp in sub_exps) {
+      dlist <- dlist_default
+      dlist$treat_p = c(0.1, 0.3, 0.5)
+      dlist$pk = 10
+      if (sub_exp == "ratio") {
+        dlist$ratio = c(1, 3, 5)
+      }
+      if (sub_exp == "caliper") {
+        dlist$caliper = c(0.01, 0.1, 0.2, 0.3)
+      }
+      if (sub_exp == "replace") {
+        dlist$replace = c("F", "T")
+      }
+      if (sub_exp == "discard") {
+        dlist$discard = c("none", "treated", "control", "both")
+      }
+      map_tmp <- do.call(expand.grid, dlist)
+      map_full <- rbind(map_full, map_tmp)
+    }
   }
   
   ### filters
-  
   map_full <- map_full %>%
     # non ATE methods: nearest, optimal, genetic
     filter(!(estimand == "ATE" & method %in% c("nearest", "optimal", "genetic"))) %>%
     # optimal, full above 10000 n too much memory, genetic too long
-    filter(!(n>10000 & method %in% c("optimal", "full", "genetic")))
+    filter(!(n>10000 & method %in% c("optimal", "full", "genetic"))) %>%
+    # method null only needs one run, distance "glm" by default which is only used to compute distance (irrelevant)
+    filter(!(method == "null" & distance != "glm"))
+  
   map_full <- map_full %>% distinct()
   
   return(map_full)
@@ -97,7 +119,7 @@ get_default_spec <- function() {
   ### return list
   dlist <- list(n=n, pk = pk,nu_xy = nu_xy,nu_conf = nu_conf,treat_p = treat_p,treat_beta = treat_beta,ev_xy=ev_xy, complexity = complexity,
                 dat=dat, f=match.formulas, estimand=estimand, method=methods, distance=distances, ratio = ratio,caliper=caliper, replace=replace,
-                    stat.formula = stat.formulas, family=family, stringsAsFactors = F)
+                    stat.formula = stat.formulas, family=family, discard=discard, stringsAsFactors = F)
   return(dlist)
 }
 

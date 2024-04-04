@@ -15,13 +15,111 @@ source("R:/home/Matching/Matching-Applied/Scripts/match_functions.R")
 
 ```{r}
 res <- read.csv("R:/home/Matching/Matching-Applied/Results/res_df_simul2.csv")
-res <- read.csv("R:/home/Matching/Matching-Applied/Results/res_final_mod1.csv")
+res <- read.csv("R:/home/Matching/Matching-Applied/Results/matched/res_aggregate_exp1.csv")
 res <- read.csv("R:/home/Matching/Matching-Applied/Results/res_mod1_j69.csv")
 ```
 
 ```{r}
+res <- read.csv("R:/home/Matching/Matching-Applied/Results/matched/res_aggregate_exp1.csv")
+res <- read.csv("R:/home/Matching/Matching-Applied/Results/matched/res_exp1_j204_summary.csv")
+```
+
+```{r}
+map <- read.csv("R:/home/Matching/Matching-Applied/Results/res_exp1_map.csv")
+colnames(map)[1] <- "map_idx"
+
+file.list <- dir("R:/home/Matching/Matching-Applied/Results/matched/", pattern = "res_exp1.*summary.csv", full.names=T)
+res <- do.call(bind_rows, lapply(file.list, read.csv))
+
+file.list <- dir("R:/home/Matching/Matching-Applied/Results/unmatched/", pattern = "res_exp1.*summary.csv", full.names=T)
+res_unmatched <- do.call(bind_rows, lapply(file.list, read.csv))
+```
+
+# Vary total N, impact on time
+```{r}
 p.dat <- res %>%
-  filter(stat.formula== stat.formula[1]) %>%
+  distinct(n, method, distance, .keep_all = T) %>%
+  mutate(n = factor(n))
+ggplot(p.dat, aes(x=time.sec_mean, y = method, colour=distance)) +
+  geom_point(size = 1, position = position_dodge(width=0.5)) +
+  geom_linerange(aes(xmin=time.sec_mean-time.sec_sd, xmax=time.sec_mean+time.sec_sd), position = position_dodge(width=0.5)) +
+  facet_wrap(~n, nrow = 1)
+ggplot(p.dat, aes(x=ESS.total.perc_mean, y = adjusted_confint.coverage_mean, group=n, colour=n)) +
+  geom_point(size = 1, position = position_dodge(width=0.5))+
+  facet_wrap(~method, nrow = 1)
+ggplot(p.dat, aes(x=adjusted_confint.coverage_mean, y = method, colour=distance)) +
+  geom_point(size = 1, position = position_dodge(width=0.5))+
+  facet_wrap(~n, nrow = 1)
+```
+# Vary pk
+```{r}
+p.dat <- res %>%
+  distinct(pk, method, distance, .keep_all = T) %>%
+  mutate(pk = factor(pk))
+ggplot(p.dat, aes(x=time.sec_mean, y = method, colour=distance)) +
+  geom_point(size = 1, position = position_dodge(width=0.5)) +
+  geom_linerange(aes(xmin=time.sec_mean-time.sec_sd, xmax=time.sec_mean+time.sec_sd), position = position_dodge(width=0.5)) +
+  facet_wrap(~pk, nrow = 1)
+ggplot(p.dat, aes(x=ESS.total.perc_mean, y = method, colour=distance)) +
+  geom_point(size = 1, position = position_dodge(width=0.5))+
+  facet_wrap(~pk, nrow = 1)
+ggplot(p.dat, aes(x=adjusted_confint.coverage_mean, y = method, colour=distance)) +
+  geom_point(size = 1, position = position_dodge(width=0.5))+
+  facet_wrap(~pk, nrow = 1)
+```
+# Vary nu_xy
+```{r}
+p.dat <- res %>%
+  distinct(nu_xy, method, distance, .keep_all = T) %>%
+  mutate(nu_xy = factor(nu_xy))
+ggplot(p.dat, aes(x=time.sec_mean, y = method, colour=distance)) +
+  geom_point(size = 1, position = position_dodge(width=0.5)) +
+  geom_linerange(aes(xmin=time.sec_mean-time.sec_sd, xmax=time.sec_mean+time.sec_sd), position = position_dodge(width=0.5)) +
+  facet_wrap(~nu_xy, nrow = 1)
+ggplot(p.dat, aes(x=ESS.total.perc_mean, y = method, colour=distance)) +
+  geom_point(size = 1, position = position_dodge(width=0.5))+
+  facet_wrap(~nu_xy, nrow = 1)
+ggplot(p.dat, aes(x=adjusted_confint.coverage_mean, y = method, colour=distance)) +
+  geom_point(size = 1, position = position_dodge(width=0.5))+
+  facet_wrap(~nu_xy, nrow = 1)
+```
+
+```{r}
+c("ESS.total.perc", "SMD",  "Var.ratio", "KS", "SMD.PBR", "time.sec", "unadjusted_estimate", "unadjusted_std.error", "unadjusted_squared.error", "unadjusted_mse", "unadjusted_confint.upper")
+# need to compare with method null!
+# at some point may need to plot the full thing
+# for pk > 1, need to look at SMD.mean_mean, max, etc
+
+```
+
+
+
+
+
+######################
+######################
+
+
+```{r}
+p.dat <- res %>%
+  filter(n==1000, stat.formula== stat.formula[1]) %>%
+  mutate(Total_n = All..ESS..Control + All..ESS..Treated,
+         Total_matched = Matched..ESS..Control + Matched..ESS..Treated,
+         ESS_control_remainder = All..ESS..Control - Matched..ESS..Control,
+         ESS_treated_remainder = All..ESS..Treated - Matched..ESS..Treated) %>%
+  select(map_idx, Total_matched, "Matched..ESS..Control", "Matched..ESS..Treated") %>%
+  group_by(map_idx) %>%
+  summarise_if(is.numeric,list(mean = ~mean(.), sd = ~sd(.), se = ~sd(./sqrt(.)))) %>%
+  left_join(res[,1:11], by = "map_idx", multiple = "first")
+
+p.dat %>% ggplot(p.dat, aes(x=Total_matched_mean, y=distance)) +
+  geom_point() +
+  facet_wrap(~ method + estimand + treat_p)
+```
+
+
+```{r}
+%>%
   mutate(Total_n = All..ESS..Control + All..ESS..Treated,
          Total_matched = Matched..ESS..Control + Matched..ESS..Treated,
          ESS_control_remainder = All..ESS..Control - Matched..ESS..Control,
@@ -42,6 +140,7 @@ ggplot(p.dat, aes(x=value, y=distance, fill=variable)) +
         legend.text = element_text(size=8))
 
 ```
+
 ```{r}
 p.dat <- res %>%
   filter(stat.formula== stat.formula[1]) %>%

@@ -118,7 +118,7 @@ MatchingFun <- function(formula, data, estimand, method, distance, ratio, calipe
       summ.covars[,1] <- abs(summ.covars[,1])
       colnames(summ.covars) <- c("SMD", "Var.ratio", "KS", "SMD.PBR", "Var.ratio.log.PBR", "KS.PBR")
       
-      summ.covars <- as.matrix(data.frame(mean = colMeans(summ.covars, na.rm = T),
+      summ.covars <- as.matrix(data.frame(mean = apply(summ.covars,2,mean, na.rm = T),
                                           median = apply(summ.covars,2,median,na.rm = T),
                                           max = apply(summ.covars,2,max)))
       summ.covars <- unmatrix(summ.covars, byrow = T)
