@@ -24,15 +24,15 @@ dir.create("../Results/matched/", showWarnings = F)
 
 args = commandArgs(trailingOnly=TRUE)
 map_idx = args[1]
-#map_idx = 1
+#map_idx = 12
 
 ############################
 # SPECIFICATIONS #
 ############################
 # One variable - linear
-seeds = 1:2
-
-map_full <- get_exp_specs(1)
+seeds = 1:100
+exp=1
+map_full <- get_exp_specs(exp)
 map <- map_full[map_idx,]
 
 out <- mclapply(seeds, function(seed) {
@@ -42,7 +42,7 @@ out <- mclapply(seeds, function(seed) {
   ### Generate simulation data
   ##########################################################
   
-  simul <- SimulateRegressionTreatment(n=map$n, pk = map$pk, treat_p = map$treat_p, treat_beta=0.1, nu_conf = map$nu_conf, nu_xy = map$nu_xy, complexity = map$complexity, ev_xy=0.99)
+  simul <- SimulateRegressionTreatment(n=map$n, pk = map$pk, treat_p = map$treat_p, treat_beta=map$treat_beta, nu_conf = map$nu_conf, nu_xy = map$nu_xy, complexity = map$complexity, ev_xy=map$ev_xy)
   
   ############################
   # RUN #
@@ -57,12 +57,21 @@ out <- mclapply(seeds, function(seed) {
 
 out <- do.call(rbind.data.frame, out)
 
+if(map$method == "null") {
+  start_var <- "time"
+  end_var <- "adjusted_pval"
+} else {
+  start_var <- "ESS.total.perc"
+  end_var <- "marginal_pval"
+}
+
+
 out.summary.mean <- out %>%
-  summarise(across(ESS.total.perc:marginal_pval, \(x) mean(x, na.rm=T))) %>%
+  summarise(across(start_var:end_var, \(x) mean(x, na.rm=T))) %>%
   rename_with(~str_c(., "_mean"), everything())
 
 out.summary.sd <- out %>%
-  summarise(across(ESS.total.perc:marginal_pval, \(x) sd(x, na.rm=T))) %>%
+  summarise(across(start_var:end_var, \(x) sd(x, na.rm=T))) %>%
   rename_with(~str_c(., "_sd"), everything())
 
 out.summary <- cbind(n_seeds=length(seeds), map, out.summary.mean, out.summary.sd)
@@ -71,17 +80,17 @@ out.summary <- cbind(n_seeds=length(seeds), map, out.summary.mean, out.summary.s
 # SAVE #
 ############################
 
-map_savepath <- paste0("../Results/res_mod",mod,"_map.csv")
+map_savepath <- paste0("../Results/res_exp",exp,"_map.csv")
 if(!file.exists(map_savepath)) {
   write.csv(map_full, map_savepath, row.names=F)
 }
 
 if (map$method == "null") {
-  write.csv(out, paste0("~/../ephemeral/Matching/Results/unmatched/res_mod",mod,"_j", map_idx, "_null_iter.csv"), row.names = F)
-  write.csv(out.summary, paste0("../Results/unmatched/res_mod",mod,"_j", map_idx, "_null_summary.csv"), row.names = F)
+  write.csv(out, paste0("~/../ephemeral/Matching/Results/unmatched/res_exp",exp,"_j", map_idx, "_null_iter.csv"), row.names = F)
+  write.csv(out.summary, paste0("../Results/unmatched/res_exp",exp,"_j", map_idx, "_null_summary.csv"), row.names = F)
 } else {
-  write.csv(out, paste0("~/../ephemeral/Matching/Results/matched/res_mod",mod,"_j", map_idx, "_iter.csv"), row.names = F)
-  write.csv(out.summary, paste0("../Results/matched/res_mod",mod,"_j", map_idx, "_summary.csv"), row.names = F)
+  write.csv(out, paste0("~/../ephemeral/Matching/Results/matched/res_exp",exp,"_j", map_idx, "_iter.csv"), row.names = F)
+  write.csv(out.summary, paste0("../Results/matched/res_exp",exp,"_j", map_idx, "_summary.csv"), row.names = F)
 }
 
 #################

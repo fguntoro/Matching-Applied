@@ -4,7 +4,7 @@ get_exp_specs <- function(exp = 1) {
   ### get default
   dlist_default = get_default_spec()
   
-  sub_exps <- c("n", "pk", "nu_xy", "nu_conf", "treat_p", "treat_beta", "complexity")
+  sub_exps <- c("n", "pk", "nu_xy", "nu_conf", "treat_p", "treat_beta", "ev_xy", "complexity")
   
   map_full <- data.frame()
   
@@ -32,6 +32,9 @@ get_exp_specs <- function(exp = 1) {
       if (sub_exp == "treat_beta") {
         dlist$treat_beta = c(0.1, 0.5, 1)
       }
+      if (sub_exp == "ev_xy") {
+        dlist$ev_xy = c(0.5, 0.7, 0.99)
+      }
       if (sub_exp == "complexity") {
         dlist$complexity = c("linear", "sq", "sin")
       }
@@ -39,9 +42,19 @@ get_exp_specs <- function(exp = 1) {
       map_full <- rbind(map_full, map_tmp)
       
     }
-    map_full <- map_full %>% distinct()
-  }
+    
 
+  }
+  
+  ### filters
+  
+  map_full <- map_full %>%
+    # non ATE methods: nearest, optimal, genetic
+    filter(!(estimand == "ATE" & method %in% c("nearest", "optimal", "genetic"))) %>%
+    # optimal, full above 10000 n too much memory, genetic too long
+    filter(!(n>10000 & method %in% c("optimal", "full", "genetic")))
+  map_full <- map_full %>% distinct()
+  
   return(map_full)
 }
 
@@ -53,6 +66,7 @@ get_default_spec <- function() {
   nu_conf = 1
   treat_p = 0.5
   treat_beta = 1
+  ev_xy=0.99
   complexity = "linear"
   
   ### matching specs
@@ -81,7 +95,7 @@ get_default_spec <- function() {
   family = "gaussian"
   
   ### return list
-  dlist <- list(n=n, pk = pk,nu_xy = nu_xy,nu_conf = nu_conf,treat_p = treat_p,treat_beta = treat_beta,complexity = complexity,
+  dlist <- list(n=n, pk = pk,nu_xy = nu_xy,nu_conf = nu_conf,treat_p = treat_p,treat_beta = treat_beta,ev_xy=ev_xy, complexity = complexity,
                 dat=dat, f=match.formulas, estimand=estimand, method=methods, distance=distances, ratio = ratio,caliper=caliper, replace=replace,
                     stat.formula = stat.formulas, family=family, stringsAsFactors = F)
   return(dlist)

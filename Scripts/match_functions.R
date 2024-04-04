@@ -112,16 +112,21 @@ MatchingFun <- function(formula, data, estimand, method, distance, ratio, calipe
     ESS.total.perc <- round(sum(summ$nn[3,]) / sum(summ$nn[1,]) * 100, 2)
     res <- c(unmatrix(summ$nn, byrow = T), ESS.total.perc = ESS.total.perc)
     
-    # Get SMD, var ratio, and KS
-    summ.covars <- cbind(summ$sum.matched[covar.names,c(3,4,6)], summ$reduction[covar.names, c(1,2,4)])
-    summ.covars[,1] <- abs(summ.covars[,1])
-    colnames(summ.covars) <- c("SMD", "Var.ratio", "KS", "SMD.PBR", "Var.ratio.log.PBR", "KS.PBR")
-    
     if(length(covar.names) > 1) {
+      # Get SMD, var ratio, and KS
+      summ.covars <- cbind(summ$sum.matched[covar.names,c(3,4,6)], summ$reduction[covar.names, c(1,2,4)])
+      summ.covars[,1] <- abs(summ.covars[,1])
+      colnames(summ.covars) <- c("SMD", "Var.ratio", "KS", "SMD.PBR", "Var.ratio.log.PBR", "KS.PBR")
+      
       summ.covars <- as.matrix(data.frame(mean = colMeans(summ.covars, na.rm = T),
                                           median = apply(summ.covars,2,median,na.rm = T),
                                           max = apply(summ.covars,2,max)))
       summ.covars <- unmatrix(summ.covars, byrow = T)
+    } else {
+      # Get SMD, var ratio, and KS
+      summ.covars <- c(summ$sum.matched[covar.names,c(3,4,6)], summ$reduction[covar.names, c(1,2,4)])
+      summ.covars[1] <- abs(summ.covars[1])
+      names(summ.covars) <- c("SMD", "Var.ratio", "KS", "SMD.PBR", "Var.ratio.log.PBR", "KS.PBR")
     }
     
     res <- c(res, summ.covars, time.sec=time)
