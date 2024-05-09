@@ -220,11 +220,17 @@ SimulateRegressionTreatment <- function (n = 100, pk = 10, xdata = NULL, family 
   
   if (nu_conf != 0) {
     # Confounding + treatment
-    theta_conf <- SamplePredictors(pk = p, q = q, nu = nu_conf, 
+    theta_conf <- SamplePredictors(pk = p, q = q, nu = nu_conf,
                                    orthogonal = FALSE)
     theta_conf_prob <- theta_conf * matrix(stats::runif(n= nrow(theta_conf) * ncol(theta_conf), min = 0, max = 1))
     treat_prob <- rescale(xdata %*% theta_conf_prob)
-    treat_prob <- treat_prob^log(treat_p, mean(treat_prob)) # transform to treat_p
+    
+    if(treat_p == -1) {
+      treat_prob <- treat_prob^log(0.5, mean(treat_prob)) # transform to treat_p
+      treat_prob <- ifelse(treat_prob < 0.68 & treat_prob > 0.34, 0.1, 0.9)
+    } else {
+      treat_prob <- treat_prob^log(treat_p, mean(treat_prob)) # transform to treat_p
+    }
   } else {
     #generate warning to ignore nu_conf
     theta_conf <- matrix(0,ncol = q, nrow=p)

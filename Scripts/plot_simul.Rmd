@@ -2,6 +2,21 @@
 title: "R Notebook"
 output: html_notebook
 ---
+```{r}
+library(dplyr)
+library(parallel)
+library(MatchIt)
+library(gdata)
+library(survival)
+library(marginaleffects)
+library(lme4)
+library(lmtest) #coeftest
+library(sandwich) #vcovCL
+library(stringr)
+source("R:/home/Matching/Matching-Applied/Scripts/mod_definitions.R")
+source("R:/home/Matching/Matching-Applied/Scripts/simul.R")
+source("R:/home/Matching/Matching-Applied/Scripts/match_functions.R")
+```
 
 ```{r}
 df = simul1(1000)
@@ -71,3 +86,30 @@ m.dat <- match.data(m.out)
 fit <- lm(y ~ x1 + x2, m.dat, weights = weights)
 summary(fit)
 ```
+```{r}
+
+for (map_idx in c(1, 732, 737)) {
+  set.seed(123)
+  exp=1
+  #map_idx=732
+  map_full <- get_exp_specs(exp)
+  map <- map_full[map_idx,]
+  
+  simul <- SimulateRegressionTreatment(n=map$n, pk = map$pk, treat_p = map$treat_p, treat_beta=map$treat_beta, nu_conf = map$nu_conf, nu_xy = map$nu_xy, complexity = map$complexity, ev_xy=map$ev_xy)
+  
+  df <- data.frame(x = simul$xdata[,1],
+                 y = simul$ydata[,1],
+                 treat = factor(simul$treat))
+  ggplot(df,
+       aes(x, y,
+           color = treat)) +
+  geom_point() + 
+  labs(color = "Treatment") +
+  theme_bw() +
+  theme(legend.position = "none")
+  
+  ggsave(paste0("C:/Users/fg520/OneDrive - Imperial College London/Documents/2023-2024/LSR/SPH Symposium/Figures/simul_",map_idx ,".png"), width= 3, height = 3)
+}
+
+```
+

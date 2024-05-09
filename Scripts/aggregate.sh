@@ -1,4 +1,8 @@
-awk '(NR == 1) || (FNR > 1)' ../Results/unmatched/res_exp1_j*.csv > ../Results/unmatched/res_aggregate_exp1.csv
-awk '(NR == 1) || (FNR > 1)' ../Results/matched/res_exp1_j*.csv > ../Results/matched/res_aggregate_exp1.csv
+#!/bin/bash
+foldername="simul1"
+#awk '(NR == 1) || (FNR > 1)' ../Results/${foldername}/res_j*_norm_summary.csv > ../Results/${foldername}/res_aggregate.csv
+#awk '(NR == 1) || (FNR > 1)' ../Results/${foldername}/res_j*_pk1_summary.csv > ../Results/${foldername}/res_aggregate_pk1.csv
+#awk '(NR == 1) || (FNR > 1)' ../Results/${foldername}/res_j*_null_summary.csv > ../Results/${foldername}/res_aggregate_null.csv
+mlr --csv unsparsify ../Results/${foldername}/res_*summary.csv > ../Results/${foldername}/res_aggregate.csv
 
 echo "stop"

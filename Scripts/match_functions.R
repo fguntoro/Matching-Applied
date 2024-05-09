@@ -1,4 +1,4 @@
-main <- function(data, map) {
+main <- function(data, map, full_covar = F) {
   estimand <- map$estimand
   method <- map$method
   distance <- map$distance
@@ -29,13 +29,16 @@ main <- function(data, map) {
     
   } else {
     data <- data
+    formula.str <- map$f
+    stat.formula <- map$stat.formula
+    
     #TODO
   }
   
   match.fm <- as.formula(formula.str)
   stat.fm <- as.formula(stat.formula)
   
-  match_out <- MatchingFun(formula=match.fm, data=data, estimand=estimand, method=method, distance=distance, ratio=ratio, caliper, replace, discard)
+  match_out <- MatchingFun(formula=match.fm, data=data, estimand=estimand, method=method, distance=distance, ratio=ratio, caliper, replace, discard, full_covar)
   stats_out <- StatsFun(formula=stat.fm, data=match_out$m.dat, family = family, weights = match_out$m.dat$weights, method = method, treat_beta=treat_beta)
   
   res <- data.frame(as.list(c(map, match_out$res, stats_out)))
@@ -45,7 +48,7 @@ main <- function(data, map) {
 
 rescale <- function(x){(x-min(x))/(max(x)-min(x))}
 
-MatchingFun <- function(formula, data, estimand, method, distance, ratio, caliper, replace, discard){
+MatchingFun <- function(formula, data, estimand, method, distance, ratio, caliper, replace, discard, full_covar){
   print(paste0("Running ", method, " with distance ", distance, " and ratio ", ratio))
   
   covar.names <- labels(terms(formula))
@@ -68,7 +71,7 @@ MatchingFun <- function(formula, data, estimand, method, distance, ratio, calipe
   if (caliper == "null") {
     caliper = NULL
   } else {
-    caliper = caliper
+    caliper = as.numeric(caliper)
   }
   
   if (replace == "F") {
@@ -99,13 +102,34 @@ MatchingFun <- function(formula, data, estimand, method, distance, ratio, calipe
   time <- difftime(timeEnd, timeStart, units="secs")
   print(time)
   
-  m.dat <- match.data(m.out)
+  m.dat <- if(replace == T & method == "nearest" & distance %in% c("scaled_euclidean", "robust_mahalanobis")) get_matches(m.out) else match.data(m.out)
   
   summ <- summary(m.out, addlvariables=covar.names, standardize=T, improvement=T, pair.dist=F)
 
   if(method == "null") {
-    res <- c(unmatrix(summ$nn, byrow = T),
-             time=time)
+    res <- c(unmatrix(summ$nn, byrow = T))
+    
+    if(length(covar.names) > 1) {
+      # Get SMD, var ratio, and KS
+      summ.covars <- cbind(summ$sum.all[covar.names,c(3,4,6)])
+      summ.covars[,1] <- abs(summ.covars[,1])
+      colnames(summ.covars) <- c("SMD", "Var.ratio", "KS")
+      
+      if(!full_covar) {
+        summ.covars <- as.matrix(data.frame(mean = apply(summ.covars,2,mean, na.rm = T),
+                                            median = apply(summ.covars,2,median,na.rm = T),
+                                            max = apply(summ.covars,2,max)))
+      }
+      
+      summ.covars <- unmatrix(summ.covars, byrow = T)
+      
+    } else {
+      # Get SMD, var ratio, and KS
+      summ.covars <- c(summ$sum.all[covar.names,c(3,4,6)])
+      summ.covars[1] <- abs(summ.covars[1])
+      names(summ.covars) <- c("SMD", "Var.ratio", "KS")
+    }
+    
   } else {
     # Get sample sizes including ESS, ESS/total%
     row.names(summ$nn)[c(1,3)] <- c("All.ESS", "Matched.ESS")
@@ -118,10 +142,14 @@ MatchingFun <- function(formula, data, estimand, method, distance, ratio, calipe
       summ.covars[,1] <- abs(summ.covars[,1])
       colnames(summ.covars) <- c("SMD", "Var.ratio", "KS", "SMD.PBR", "Var.ratio.log.PBR", "KS.PBR")
       
-      summ.covars <- as.matrix(data.frame(mean = apply(summ.covars,2,mean, na.rm = T),
-                                          median = apply(summ.covars,2,median,na.rm = T),
-                                          max = apply(summ.covars,2,max)))
+      if(!full_covar) {
+        summ.covars <- as.matrix(data.frame(mean = apply(summ.covars,2,mean, na.rm = T),
+                                            median = apply(summ.covars,2,median,na.rm = T),
+                                            max = apply(summ.covars,2,max)))
+      }
+
       summ.covars <- unmatrix(summ.covars, byrow = T)
+      
     } else {
       # Get SMD, var ratio, and KS
       summ.covars <- c(summ$sum.matched[covar.names,c(3,4,6)], summ$reduction[covar.names, c(1,2,4)])
@@ -129,9 +157,8 @@ MatchingFun <- function(formula, data, estimand, method, distance, ratio, calipe
       names(summ.covars) <- c("SMD", "Var.ratio", "KS", "SMD.PBR", "Var.ratio.log.PBR", "KS.PBR")
     }
     
-    res <- c(res, summ.covars, time.sec=time)
   }
-  
+  res <- c(res, time.sec=time, summ.covars)
   res <- data.frame(as.list(res))
   res <- res %>% dplyr::select(-contains("distance.", ignore.case=F))
   
@@ -144,9 +171,10 @@ MatchingFun <- function(formula, data, estimand, method, distance, ratio, calipe
 StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "marginal"), formula, data, family="quasibinomial", weights, method, treat_beta) {
   
   if (family == "gaussian") {
-    types=c("unadjusted", "adjusted", "mixed", "marginal")
+    types=c("unadjusted", "adjusted", "marginal")
     comparison = "differenceavg"
   } else {
+    types=c("unadjusted", "adjusted", "marginal")
     comparison = "lnoravg"
   }
   
@@ -156,7 +184,7 @@ StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "
   
   outcome <- as.character(formula[[2]])
   covar.names <- labels(terms(formula))
-  treat <- covar.names[1]
+  expo <- covar.names[1]
   covar.names <- covar.names[-1]
   
   # dat_outcome <- data[,outcome]
@@ -173,7 +201,8 @@ StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "
   #   res <- c(res, stats_empty)
   # 
   # } else {
-    t.test.res <- t.test(data$y[which(data$treat == 1)], data$y[which(data$treat == 0)])
+    t.test.res <- t.test(data[which(data[expo] == 1), outcome], data[which(data[expo] == 0), outcome])
+    # t.test.res <- t.test(data$y[which(data$treat == 1)], data$y[which(data$treat == 0)])
     t.test.res <- c(t.test.res$estimate, t.test.res$p.value)
     names(t.test.res) <- c("treat1.mean", "treat2.mean", "t.test.pval")
     
@@ -181,22 +210,27 @@ StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "
       
       if (type == "unadjusted") {
         # unadjusted
-        fm <- formula(paste0(outcome, "~", treat))
-        fit <- glm(fm, data = data, family=family, weights = weights)
+        fm <- formula(paste0(outcome, "~", expo))
+        
+        #if (family == "binomial") {
+        #  fit <- glm(fm, data = data, family="quasibinomial", weights = weights)
+        #} else {
+          fit <- glm(fm, data = data, family=family, weights = weights)
+        #}
         
       } else if (type == "adjusted") {
         # adjusted
-        fm <- formula(paste0(outcome, "~", treat, "+", paste0(covar.names, collapse = "+")))
+        fm <- formula(paste0(outcome, "~", expo, "+", paste0(covar.names, collapse = "+")))
         fit <- glm(fm, data = data, family=family, weights = weights)
         
       } else if (type == "conditional") {
         # conditional logistic regression
-        fm <- formula(paste0(outcome, "~", treat, "+", paste0(covar.names, collapse = "+"), " + strata(subclass)" ))
+        fm <- formula(paste0(outcome, "~", expo, "+", paste0(covar.names, collapse = "+"), " + strata(subclass)" ))
         fit <- clogit(fm, method="approximate", data = data, weights = weights)
         
       } else if (type == "mixed") {
-        # conditional logistic regression
-        fm <- formula(paste0(outcome, "~", treat, "+ (1 | subclass) +", paste0(covar.names, collapse = "+")))
+        # mixed logistic regression
+        fm <- formula(paste0(outcome, "~", expo, "+ (1 | subclass) +", paste0(covar.names, collapse = "+")))
         if (family == "gaussian") {
           fit <- suppressWarnings(lmer(fm, data = data, weights = weights))
         } else {
@@ -204,12 +238,12 @@ StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "
         }
         
       } else if (type == "marginal") {
-        fm <- formula(paste0(outcome, "~", treat, "+", paste0(covar.names, collapse = "+")))
+        fm <- formula(paste0(outcome, "~", expo, "+", paste0(covar.names, collapse = "+")))
         fit <- glm(fm, data = data, family=family, weights = weights)
         # marginal effect
-        fit <- avg_comparisons(fit, variables = treat,
+        fit <- avg_comparisons(fit, variables = expo,
                                vcov = ~subclass,
-                               newdata = subset(data, treat == 1), comparison = comparison,
+                               newdata = subset(data, get(expo) == 1), comparison = comparison,
                                wts = "weights")
       }
       res <- c(res, StatsGet(fit, type, family, treat_beta))
@@ -220,7 +254,7 @@ StatsFun <- function(types=c("unadjusted", "adjusted", "conditional", "mixed", "
 }
 
 
-StatsGet <- function(fit, type, family, treat_beta) {
+StatsGet <- function(fit, type, family, treat_beta = NULL) {
   
   if (type %in% c("marginal")) {
     summ <- summary(fit)
@@ -235,13 +269,29 @@ StatsGet <- function(fit, type, family, treat_beta) {
     summ <- summary(fit)
     estimate <- summ$coefficients[2,1]
     std.error <- summ$coefficients[2,2]
-    fit.confint <- confint(fit, method="Wald")
-    lower.bound <- fit.confint[4,1]
-    upper.bound <- fit.confint[4,2]
-    mse <- mean(residuals(fit, type="pearson")^2)
+    
+    degrees.freedom = fit$df.null #TODO fix this error return df, or just get confint below
+    alpha = 0.05
+    t.score = qt(p=alpha/2, df=degrees.freedom,lower.tail=F)
+    margin.error <- t.score * std.error
+    lower.bound <- estimate - margin.error
+    upper.bound <- estimate + margin.error
+    
+    #fit.confint <- confint(fit, method="Wald")
+    #lower.bound <- fit.confint[4,1]
+    #upper.bound <- fit.confint[4,2]
+    mse <- mean(residuals(fit, type="deviance")^2)
     
     # to get pval
     fm <- update.formula(formula(fit), . ~ . -treat)
+    
+    fit0 <- update(fit, formula=drop.terms(terms(fit), 1, keep.response=TRUE))
+    fit0 <- update(fit,. ~. -get(expo))
+    tmp <- data %>%
+      dplyr::select(-subclass) %>%
+      apply(2, rescale) %>%
+      as.data.frame()
+    
     data <- fit@frame
     colnames(data)[ncol(data)] <- "weights"
     if (family == "gaussian") {
@@ -249,7 +299,7 @@ StatsGet <- function(fit, type, family, treat_beta) {
     } else {
       fit0 <- suppressWarnings(glmer(fm, data = data, weights = weights, family=family))
     }
-    pval <- anova(fit0, fit)[2,8]
+    pval <- anova(fit0, fit, test="Chisq")[2,5]
     # pval = suppressWarnings(drop1(fit, test="Chisq"))[2,4]
     
   } else {
@@ -262,30 +312,42 @@ StatsGet <- function(fit, type, family, treat_beta) {
     summ <- summary(fit)
     estimate <- summary(fit)$coefficients[idx, 1]
     std.error <- summary(fit)$coefficients[idx, 2]
-    fit.confint <- suppressMessages(confint(fit, method="Wald"))
-    lower.bound <- fit.confint[idx,1]
-    upper.bound <- fit.confint[idx,2]
+    degrees.freedom = fit$df.null
+    alpha = 0.05
+    t.score = qt(p=alpha/2, df=degrees.freedom,lower.tail=F)
+    margin.error <- t.score * std.error
+    lower.bound <- estimate - margin.error
+    upper.bound <- estimate + margin.error
+    
+    #fit.confint <- suppressMessages(confint.default(fit))
+    #lower.bound <- fit.confint[idx,1]
+    #upper.bound <- fit.confint[idx,2]
     pval = summary(fit)$coefficients[idx, 4]
-    mse <- mean(residuals(fit, type="pearson")^2)
+    mse <- mean(residuals(fit, type="deviance")^2)
   }
   
-  # sample.se <- summary(fit)$coef[2,2]
-  # degrees.freedom = fit$df.null
-  # alpha = 0.05
-  # t.score = qt(p=alpha/2, df=degrees.freedom,lower.tail=F)
-  # margin.error <- t.score * sample.se
-  # lower.bound <- estimate - margin.error
-  # upper.bound <- estimate + margin.error
   
-  res <- data.frame(
-    estimate = estimate,
-    std.error = std.error,
-    confint.lower = lower.bound,
-    confint.upper = upper.bound,
-    squared.error = (estimate - treat_beta)^2,
-    confint.coverage = as.integer(lower.bound < treat_beta & treat_beta < upper.bound),
-    mse = mse
-  )
+  if(is.null(treat_beta)) {
+    res <- data.frame(
+      estimate = estimate,
+      std.error = std.error,
+      confint.lower = lower.bound,
+      confint.upper = upper.bound,
+      mse = mse
+    )
+  } else {
+    res <- data.frame(
+      estimate = estimate,
+      std.error = std.error,
+      confint.lower = lower.bound,
+      confint.upper = upper.bound,
+      squared.error = (estimate - treat_beta)^2,
+      confint.coverage = as.integer(lower.bound < treat_beta & treat_beta < upper.bound),
+      mse = mse
+    )
+  }
+  
+
   
   if (family != "gaussian") {
     res <- exp(res)

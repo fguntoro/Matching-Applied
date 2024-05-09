@@ -21,19 +21,21 @@ source("~/Matching/Matching-Applied/Scripts/mod_definitions.R")
 setwd("/rds/general/user/fg520/home/Matching/Matching-Applied/Scripts/")
 
 dir.create("../Results/", showWarnings = F)
-dir.create("../Results/unmatched/", showWarnings = F)
-dir.create("../Results/matched/", showWarnings = F)
 
 args = commandArgs(trailingOnly=TRUE)
 map_idx = args[1]
-#map_idx = 12
+#map_idx = 732
 
 ############################
 # SPECIFICATIONS #
 ############################
 # One variable - linear
 seeds = 1:100
-exp=2
+exp=1
+foldername = paste0("simul", exp)
+dir.create(paste0("../Results/", foldername), showWarnings = F)
+dir.create(paste0("~/../ephemeral/Matching/Results/", foldername), showWarnings = F)
+
 map_full <- get_exp_specs(exp)
 map <- map_full[map_idx,]
 
@@ -45,7 +47,6 @@ out <- mclapply(seeds, function(seed) {
   ##########################################################
   
   simul <- SimulateRegressionTreatment(n=map$n, pk = map$pk, treat_p = map$treat_p, treat_beta=map$treat_beta, nu_conf = map$nu_conf, nu_xy = map$nu_xy, complexity = map$complexity, ev_xy=map$ev_xy)
-  
   ############################
   # RUN #
   ############################
@@ -61,7 +62,7 @@ out <- do.call(rbind.data.frame, out)
 out <- cbind(exp=exp, out)
 
 if(map$method == "null") {
-  start_var <- "time"
+  start_var <- "time.sec"
   end_var <- "adjusted_pval"
 } else {
   start_var <- "ESS.total.perc"
@@ -82,18 +83,18 @@ out.summary <- cbind(exp=exp, map_idx=map_idx, n_seeds=length(seeds), map, out.s
 # SAVE #
 ############################
 
-map_savepath <- paste0("../Results/res_exp",exp,"_map.csv")
+map_savepath <- paste0("../Results/", foldername, "/res_exp",exp,"_map.csv")
 write.csv(map_full, map_savepath, row.names=T)
 
 if (map$method == "null") {
-  write.csv(out, paste0("~/../ephemeral/Matching/Results/res_exp",exp,"_j", map_idx, "_null_iter.csv"), row.names = F)
-  write.csv(out.summary, paste0("../Results/res_exp",exp,"_j", map_idx, "_null_summary.csv"), row.names = F)
-} else if (pk == 1) {
-  write.csv(out, paste0("~/../ephemeral/Matching/Results/res_exp",exp,"_j", map_idx, "_pk1_iter.csv"), row.names = F)
-  write.csv(out.summary, paste0("../Results/res_exp",exp,"_j", map_idx, "_pk1_summary.csv"), row.names = F)
+  write.csv(out, paste0("~/../ephemeral/Matching/Results/", foldername,"/res_j", map_idx, "_null_iter.csv"), row.names = F)
+  write.csv(out.summary, paste0("../Results/", foldername, "/res_j", map_idx, "_null_summary.csv"), row.names = F)
+} else if (map$pk == 1) {
+  write.csv(out, paste0("~/../ephemeral/Matching/Results/", foldername, "/res_j", map_idx, "_pk1_iter.csv"), row.names = F)
+  write.csv(out.summary, paste0("../Results/", foldername, "/res_j", map_idx, "_pk1_summary.csv"), row.names = F)
 } else {
-  write.csv(out, paste0("~/../ephemeral/Matching/Results/res_exp",exp,"_j", map_idx, "_iter.csv"), row.names = F)
-  write.csv(out.summary, paste0("../Results/res_exp",exp,"_j", map_idx, "_summary.csv"), row.names = F)
+  write.csv(out, paste0("~/../ephemeral/Matching/Results/", foldername, "/res_j", map_idx, "_norm_iter.csv"), row.names = F)
+  write.csv(out.summary, paste0("../Results/", foldername, "/res_j", map_idx, "_norm_summary.csv"), row.names = F)
 }
 
 #################
