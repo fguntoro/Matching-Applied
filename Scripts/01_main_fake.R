@@ -31,7 +31,7 @@ map_idx = args[1]
 ############################
 # One variable - linear
 seeds = 1:100
-exp=1
+exp=2
 foldername = paste0("simul", exp)
 dir.create(paste0("../Results/", foldername), showWarnings = F)
 dir.create(paste0("~/../ephemeral/Matching/Results/", foldername), showWarnings = F)
